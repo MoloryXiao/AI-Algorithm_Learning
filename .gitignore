@@ -1,3 +1,13 @@
+# Custom-Xiao
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+ipch/
+Debug/
+*.sdf
+*.sln
+*.suo
+
 # Windows image file caches
 Thumbs.db
 ehthumbs.db
