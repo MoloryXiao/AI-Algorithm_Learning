@@ -1,76 +1,116 @@
-#include <iostream>
-#include <vector>
-#include <algorithm>
-#include <math.h>
+ï»¿#include <iostream>
 #include <fstream>
+#include <vector>
+#include <math.h>
 #include <iomanip>
+#include <algorithm>
 using namespace std;
 
-#define ELEMENT_NUM  4	// ÊôĞÔ¸öÊı
+#define ELEMENT_NUM  4	// å±æ€§ä¸ªæ•°
 
+/* è®­ç»ƒæ•°æ®æˆ–æµ‹è¯•æ•°æ®æ ¼å¼å®šä¹‰ */
 struct DataFormat
 {
 	double element[ELEMENT_NUM];
 	int familyNum;
 };
+/* åˆ†è£‚ç»“æœè®°å½• */
 struct SpilitRecord
 {
-	int divideRule;
-	double divideLine;
-	double infoGain;
-	double gainRatio;
+	int divideRule;			// åˆ’åˆ†å±æ€§
+	double divideLine;		// åˆ’åˆ†ç•Œçº¿
+	double infoGain;		// ä¿¡æ¯å¢ç›Š
+	double gainRatio;		// ä¿¡æ¯å¢ç›Šç‡
 };
+/* ç»“ç‚¹ç”Ÿæˆå­æ ‘çš„ä¾æ® */
 struct SplitInfo
 {
-	int divideRule;				// »®·ÖÊôĞÔ
-	double divideLine;			// »®·Ö½çÏŞ
-	double entropy;				// µ±Ç°ìØÖµ
+	int divideRule;			// åˆ’åˆ†å±æ€§
+	double divideLine;		// åˆ’åˆ†ç•Œé™
+	double entropy;			// å½“å‰ç†µå€¼
 };
+/* äºŒå‰æ ‘ç»“ç‚¹ */
 typedef struct Node
 {
-	SplitInfo spif;				// ½áµã·ÖÁÑµÄÏà¹ØĞÅÏ¢
-	vector<int> subSet;			// Êı¾İ×Ó¼¯µÄ±êºÅ¼¯
+	int familyNum;			// å½“å‰ç±»åˆ«
+	SplitInfo spif;			// ç»“ç‚¹åˆ†è£‚çš„ç›¸å…³ä¿¡æ¯
+	vector<int> subSet;		// æ•°æ®çš„æ ‡å·é›†
 	struct Node *lChild;
 	struct Node *rChild;
-	int familyNum;				// µ±Ç°Àà±ğ
 }BTreeNode,*BTree;
 	
-vector<DataFormat> g_DataGroup;	// ËùÓĞµÄÊı¾İ¼¯
-vector<DataFormat> g_TestGroup;
-vector<SpilitRecord> g_spilitRecords;
+vector<DataFormat> g_DataGroup;	// æ‰€æœ‰çš„è®­ç»ƒæ•°æ®
+vector<DataFormat> g_TestGroup;	// æ‰€æœ‰çš„æµ‹è¯•æ•°æ®
+vector<SpilitRecord> g_spilitRecords;	// ç”¨äºå­˜å‚¨å½“å‰ç»“ç‚¹çš„æ‰€æœ‰åˆ†è£‚æ–¹æ¡ˆ
 
-void BuildTree(BTree &node);
+/* sortæ’åºè‡ªå®šä¹‰è§„åˆ™ */
+bool cmp(const int &a,const int &b);
+bool cmp_ratio(const SpilitRecord &a,const SpilitRecord &b);
+bool cmp_gain(const SpilitRecord &a,const SpilitRecord &b);
+
+/* æ•°å­¦è®¡ç®— */
+double log2(double p);
+
+/* é‡è¦å…¬å¼ */
+double CalcEntropy(BTreeNode &node);
+double CalcDivideEntropy(BTreeNode &node,int rule,double line,double &spilitE);
+double CalcGain(BTreeNode &node,int rule,double line,double &spilitE);
+double CalcGainRatio(double infoGain,double spilitE);
+
+/* æ„å»ºåˆ†è£‚ */
+void GetAllSpilit(BTreeNode &node);
+int GetPerfectRule();
+double GetPerfectLine(int rule);
+void Spilit(BTreeNode &node);
+int GetCategory(BTreeNode &node);
+
+/* æ•°æ®è¾“å…¥ */
+void TrainDataIn();
+void TestDataIn();
+
+/* æ„å»ºå†³ç­–æ ‘ */
 void InitRootNode(BTree &node);
 void InitNewNode(BTreeNode &node);
+void BuildTree(BTree &node);
+void TreePrint(BTree T,int level);
 
+/* éªŒè¯æ¨¡å‹ */
+void SearchResult(BTree &node,const DataFormat &data,int &result);
+void VerifyTestData(BTree &node);
+
+// å¯¹æ•°æ®æŒ‰ç±»åˆ«ä»å°åˆ°å¤§æ’åº[ç”¨äºæ–¹ä¾¿è®¡ç®—ç†µ]
 bool cmp(const int &a,const int &b)
 {
 	return g_DataGroup[a].familyNum < g_DataGroup[b].familyNum;
 }
+// å¯¹æ‰€æœ‰åˆ†è£‚æƒ…å†µæŒ‰ä¿¡æ¯å¢ç›Šç‡ä»å¤§åˆ°å°æ’åº[ç”¨äºé€‰å–åˆ’åˆ†å±æ€§]
 bool cmp_ratio(const SpilitRecord &a,const SpilitRecord &b)
 {
 	return a.gainRatio > b.gainRatio;
 }
+// å¯¹æ‰€æœ‰åˆ†è£‚æƒ…å†µæŒ‰ä¿¡æ¯å¢ç›Šä»å¤§åˆ°å°æ’åº[ç”¨äºé€‰å–åˆ’åˆ†ç•Œé™]
 bool cmp_gain(const SpilitRecord &a,const SpilitRecord &b)
 {
 	return a.infoGain > b.infoGain;
 }
+
+// æ•°å­¦å…¬å¼
 double log2(double p)
 {
 	return log(p)/log(2.0);
 }
 
-/* ¼ÆËã½áµãìØÖµ ¸³Öµ²¢·µ»Ø¸ÃÖµ */
+// è®¡ç®—ç»“ç‚¹ç†µå€¼ èµ‹å€¼å¹¶è¿”å›è¯¥å€¼
 double CalcEntropy(BTreeNode &node)
 {
 	if(node.subSet.size() == 0) 
 		return -1;
 
 	double entropy = 0,pi = 0;
-	double sampleSum = node.subSet.size();	// Ñù±¾×ÜÁ¿
-	sort(node.subSet.begin(),node.subSet.end(),cmp);	// ½«Êı¾İ°´Àà±ğ´ÓĞ¡µ½´óÅÅÁĞ
+	double sampleSum = node.subSet.size();	// æ ·æœ¬æ€»é‡
+	sort(node.subSet.begin(),node.subSet.end(),cmp);	// å°†æ•°æ®æŒ‰ç±»åˆ«ä»å°åˆ°å¤§æ’åˆ—
 
-	// ÀÛ¼Ó¼ÆËãìØÖµ
+	// ç´¯åŠ è®¡ç®—ç†µå€¼
 	int category = g_DataGroup[node.subSet[0]].familyNum;
 	int sameCount = 0;
 	for(int i=0;i<sampleSum;i++)
@@ -80,12 +120,12 @@ double CalcEntropy(BTreeNode &node)
 			sameCount++;
 		}else
 		{
-			pi = sameCount*1.0/sampleSum;						// Ä³Ò»Àà±ğµÄ¸ÅÂÊ
-			entropy += (-1)*pi*log2(pi);						// ÀÛ¼ÓìØÖµ
+			pi = sameCount*1.0/sampleSum;						// æŸä¸€ç±»åˆ«çš„æ¦‚ç‡
+			entropy += (-1)*pi*log2(pi);						// ç´¯åŠ ç†µå€¼
 			
-			category = g_DataGroup[node.subSet[i]].familyNum;	// ¸üĞÂ±È¶ÔÖµ
-			sameCount = 0;		// ¼ÆÊıÆ÷ÇåÁã
-			i--;				// ÍË¸ñ
+			category = g_DataGroup[node.subSet[i]].familyNum;	// æ›´æ–°æ¯”å¯¹å€¼
+			sameCount = 0;		// è®¡æ•°å™¨æ¸…é›¶
+			i--;				// é€€æ ¼
 		}
 		if(i == sampleSum-1)
 		{
@@ -97,15 +137,18 @@ double CalcEntropy(BTreeNode &node)
 	return entropy;
 }
 
-// ½áµã¸ù¾İÑ¡ÔñµÄÊôĞÔruleºÍÑ¡ÔñµÄ·ÖÁÑµãline ¼ÆËã·ÖÁÑĞÅÏ¢ìØºÍ·ÖÁÑĞÅÏ¢
+// ç»“ç‚¹æ ¹æ®é€‰æ‹©çš„å±æ€§ruleå’Œé€‰æ‹©çš„åˆ†è£‚ç‚¹line è®¡ç®—åˆ†è£‚ä¿¡æ¯ç†µå’Œåˆ†è£‚ä¿¡æ¯ ä½†ä¸èµ‹å€¼
 double CalcDivideEntropy(BTreeNode &node,int rule,double line,double &spilitE)
 {
 	BTreeNode lNode,rNode;
+	InitNewNode(lNode);	InitNewNode(rNode);
+
 	int sampleSum = node.subSet.size();
 	int lCount = 0,rCount = 0;
 	double divideEntropy = 0;
 	double piL = 0,piR = 0;
 
+	// åˆ†å †
 	for(int i=0;i<sampleSum;i++)
 	{
 		if(g_DataGroup[node.subSet[i]].element[rule] < line)
@@ -122,74 +165,74 @@ double CalcDivideEntropy(BTreeNode &node,int rule,double line,double &spilitE)
 	piL = (lCount*1.0)/(sampleSum*1.0); 
 	piR = (rCount*1.0)/(sampleSum*1.0);
 
-	divideEntropy = piL * CalcEntropy(lNode) + piR * CalcEntropy(rNode);	// »®·ÖĞÅÏ¢ìØ
-	spilitE = (-1)*piL*log2(piL) + (-1)*piR*log2(piR);						// ·ÖÁÑĞÅÏ¢
+	divideEntropy = piL * CalcEntropy(lNode) + piR * CalcEntropy(rNode);	// åˆ’åˆ†ä¿¡æ¯ç†µ
+	spilitE = (-1)*piL*log2(piL) + (-1)*piR*log2(piR);						// åˆ†è£‚ä¿¡æ¯
 
 	return divideEntropy;
 }
 
-// ¼ÆËãĞÅÏ¢ÔöÒæ
+// è®¡ç®—ä¿¡æ¯å¢ç›Š å¹¶å¸¦å›åˆ†è£‚ä¿¡æ¯
 double CalcGain(BTreeNode &node,int rule,double line,double &spilitE)
 {
 	return CalcEntropy(node) - CalcDivideEntropy(node,rule,line,spilitE);
 }
 
-// ¸ù¾İ½áµã»ñÈ¡ËùÓĞ¿ÉÄÜ·ÖÁÑµÄÇé¿ö
+// è®¡ç®—ä¿¡æ¯å¢ç›Šç‡
+double CalcGainRatio(double infoGain,double spilitE)
+{
+	return infoGain*1.0/spilitE;
+}
+
+// æ ¹æ®ç»“ç‚¹è·å–æ‰€æœ‰å¯èƒ½åˆ†è£‚çš„æƒ…å†µ
 void GetAllSpilit(BTreeNode &node)
 {
-	g_spilitRecords.swap(vector<SpilitRecord>());			// Çå¿Õ½á¹û¼¯
+	g_spilitRecords.swap(vector<SpilitRecord>());	// æ¸…ç©ºç»“æœé›†
 
 	int sampleSum = node.subSet.size();
 	if(sampleSum < 2) return;
 
-	double spilitPoint;		// ·ÖÁÑµã
-	double spilitE;			// ·ÖÁÑĞÅÏ¢
-	// ¶ÔÃ¿¸öÊôĞÔÖĞÃ¿Á½¸öÊı¾İÔªËØÈ¡ÖĞµã ×÷Îª·ÖÁÑµã
+	double spilitPoint;		// åˆ†è£‚ç‚¹
+	double spilitE;			// åˆ†è£‚ä¿¡æ¯
+	// å¯¹æ¯ä¸ªå±æ€§ä¸­æ¯ä¸¤ä¸ªæ•°æ®å…ƒç´ å–ä¸­ç‚¹ ä½œä¸ºåˆ†è£‚ç‚¹
 	for(int i=0;i<ELEMENT_NUM;i++)
 	{
 		for(int j=0;j<sampleSum-1;j++)
 		{
 			spilitPoint = g_DataGroup[node.subSet[j]].element[i] + g_DataGroup[node.subSet[j+1]].element[i];
-			spilitPoint /= 2.0;				// È¡Á½Êı¾İÖµµÄÖĞµã
+			spilitPoint /= 2.0;	// å–ä¸¤æ•°æ®å€¼çš„ä¸­ç‚¹
 				
-			SpilitRecord sr;				// ĞÂ½¨Ò»Ìõ·ÖÁÑ¼ÇÂ¼
-			sr.divideLine = spilitPoint;	// ¸³Öµ·ÖÁÑµã
-			sr.divideRule = i;				// ¸³Öµ»®·ÖÊôĞÔ
-			sr.infoGain = CalcGain(node,i,spilitPoint,spilitE);	// ¸³ÖµĞÅÏ¢ÔöÒæ Í¬Ê±¼ÆËã»®·ÖĞÅÏ¢
-			sr.gainRatio = sr.infoGain*1.0/spilitE;				// ¸³ÖµĞÅÏ¢ÔöÒæÂÊ
+			SpilitRecord sr;	// æ–°å»ºä¸€æ¡åˆ†è£‚è®°å½•
+			sr.divideLine = spilitPoint;	// èµ‹å€¼åˆ†è£‚ç‚¹
+			sr.divideRule = i;				// èµ‹å€¼åˆ’åˆ†å±æ€§
+			sr.infoGain = CalcGain(node,i,spilitPoint,spilitE);	// èµ‹å€¼ä¿¡æ¯å¢ç›Š åŒæ—¶è®¡ç®—åˆ’åˆ†ä¿¡æ¯
+			sr.gainRatio = CalcGainRatio(sr.infoGain,spilitE);	// èµ‹å€¼ä¿¡æ¯å¢ç›Šç‡
 
 			g_spilitRecords.push_back(sr);
 		}
 	}
 }
 
-/* »ñÈ¡×îÓÅµÄ»®·ÖÊôĞÔ */
+// è·å–æœ€ä¼˜çš„åˆ’åˆ†å±æ€§
 int GetPerfectRule()
 {
-	// ¶ÔËùÓĞ·ÖÁÑ²ßÂÔÈ¡×î¸ßĞÅÏ¢ÔöÒæÂÊµÄ·½°¸
+	// å¯¹æ‰€æœ‰åˆ†è£‚ç­–ç•¥å–æœ€é«˜ä¿¡æ¯å¢ç›Šç‡çš„æ–¹æ¡ˆ
 	sort(g_spilitRecords.begin(),g_spilitRecords.end(),cmp_ratio);
-	return g_spilitRecords[0].divideRule;	// È¡¸ÃÖÖ·½°¸µÄÊôĞÔ×÷Îª»®·ÖÊôĞÔ
+	return g_spilitRecords[0].divideRule;	// å–è¯¥ç§æ–¹æ¡ˆçš„å±æ€§ä½œä¸ºåˆ’åˆ†å±æ€§
 }
 
-/* ¸ù¾İ¸ø¶¨»®·ÖÊôĞÔrule µ½·ÖÁÑ²ßÂÔ¼¯ÖĞÕÒ×î¼Ñ·ÖÁÑµã */
+// æ ¹æ®ç»™å®šåˆ’åˆ†å±æ€§rule åˆ°åˆ†è£‚ç­–ç•¥é›†ä¸­æ‰¾æœ€ä½³åˆ†è£‚ç‚¹
 double GetPerfectLine(int rule)
 {
-	// ¸ù¾İĞÅÏ¢ÔöÒæ´óĞ¡½øĞĞÅÅĞò
+	// æ ¹æ®ä¿¡æ¯å¢ç›Šå¤§å°è¿›è¡Œæ’åº
 	sort(g_spilitRecords.begin(),g_spilitRecords.end(),cmp_gain);
-	// ÕÒ·ûºÏËù¸øÊôĞÔrule ²¢ËùµÃĞÅÏ¢ÔöÒæ×î´óµÄµÄ·ÖÁÑµã
+	// æ‰¾ç¬¦åˆæ‰€ç»™å±æ€§rule å¹¶æ‰€å¾—ä¿¡æ¯å¢ç›Šæœ€å¤§çš„çš„åˆ†è£‚ç‚¹
 	for(int i=0;i<g_spilitRecords.size();i++)
 		if(g_spilitRecords[i].divideRule == rule)
 			return g_spilitRecords[i].divideLine;
 	return -1;
 }
 
-/* ¶Ô´¿µã½øĞĞÑéÖ¤ ²¢·µ»ØÀà±ğ */
-int GetCategory(BTreeNode &node)
-{
-	return g_DataGroup[node.subSet[0]].familyNum;
-}
-
-/* ¸ù¾İµ±Ç°½áµãµÄ·ÖÁÑĞÅÏ¢ ¶Ô¸Ã½áµã½øĞĞ·ÖÁÑ */
+// æ ¹æ®å½“å‰ç»“ç‚¹çš„åˆ†è£‚ä¿¡æ¯ å¯¹è¯¥ç»“ç‚¹è¿›è¡Œåˆ†è£‚
 void Spilit(BTreeNode &node)
 {
 	int sampleSum = node.subSet.size();
@@ -208,72 +251,13 @@ void Spilit(BTreeNode &node)
 	}
 }
 
-/* ³õÊ¼»¯¸ù½áµãÊı¾İ */
-void InitRootNode(BTree &node)
+// å¯¹ç†µä¸º0çš„çº¯å †è¿”å›ç±»åˆ«
+int GetCategory(BTreeNode &node)
 {
-	// ÊµÀı»¯¸ù½Úµã
-	node = new BTreeNode;
-	node->familyNum = -1;
-
-	// µ±Ç°ËùÓĞÊı¾İ¶¼´¦ÓÚ¸ù½Úµã
-	int dataSum = g_DataGroup.size();
-	for(int i=0;i<dataSum;i++)
-		node->subSet.push_back(i);
-}
-/* ³õÊ¼»¯ĞÂ½áµã ´¦Àí°üº¬µÄÖ¸ÕëµÈ */
-void InitNewNode(BTreeNode &node)
-{
-	node.lChild = NULL; node.rChild = NULL;
-	node.familyNum = -1;
-	node.spif.divideLine = -1;
-	node.spif.divideRule = -1;
-	node.spif.entropy = -1;
+	return g_DataGroup[node.subSet[0]].familyNum;
 }
 
-void BuildTree(BTree &node)
-{
-	int perfectRule;		// ×î¼Ñ»®·ÖÊôĞÔ
-	double perfectLine;		// ×î¼Ñ·ÖÁÑµã
-	if(CalcEntropy(*node) == 0)			// ¸Ã½áµãÎª´¿µã ÎŞĞè½¨Á¢×ÓÊ÷
-	{
-		node->lChild = NULL;	node->rChild = NULL;
-		node->spif.divideRule = -1;	node->spif.divideLine = -1;
-		node->familyNum = GetCategory(*node);
-		return;
-	}else		// ÉĞÓĞÔÓÖÊ ¼ÌĞø·ÖÁÑ
-	{
-		// ¶Ôµ±Ç°½áµãÉú³ÉËùÓĞ·ÖÁÑ·½°¸
-		GetAllSpilit(*node);
-
-		// Ñ¡ÔñĞÅÏ¢ÔöÒæÂÊ×î´óµÄ×÷Îª·ÖÁÑÊôĞÔ
-		perfectRule = GetPerfectRule();
-		node->spif.divideRule = perfectRule;
-
-		// Ñ¡¶¨»®·ÖÊôĞÔºó Ñ¡ÔñĞÅÏ¢ÔöÒæ×î´óµÄ×÷Îª·ÖÁÑ½çÏß
-		perfectLine = GetPerfectLine(node->spif.divideRule);
-		node->spif.divideLine = perfectLine;
-
-		// ·ÖÁÑ
-		Spilit(*node);
-
-		// µİ¹éÉú³É×ÓÊ÷
-		BuildTree(node->lChild);
-		BuildTree(node->rChild);
-	}
-}
-void debug()
-{
-	DataFormat t1,t2,t3,t4,t5,t6,t7,t8,t9;
-	t1.element[0] = 5.0; t1.element[1] = 3.0; t1.element[2] = 1.6; t1.element[3] = 0.2; t1.familyNum = 1; g_DataGroup.push_back(t1);
-	t2.element[0] = 5.0; t2.element[1] = 3.4; t2.element[2] = 1.6; t2.element[3] = 0.4; t2.familyNum = 1; g_DataGroup.push_back(t2);
-	t3.element[0] = 5.2; t3.element[1] = 3.5; t3.element[2] = 1.5; t3.element[3] = 0.2; t3.familyNum = 1; g_DataGroup.push_back(t3);
-	t4.element[0] = 6.7; t4.element[1] = 3.0; t4.element[2] = 4.4; t4.element[3] = 1.4; t4.familyNum = 2; g_DataGroup.push_back(t4);
-	t5.element[0] = 6.8; t5.element[1] = 2.8; t5.element[2] = 4.8; t5.element[3] = 1.4; t5.familyNum = 2; g_DataGroup.push_back(t5);
-	t6.element[0] = 6.7; t6.element[1] = 3.0; t6.element[2] = 5.0; t6.element[3] = 1.7; t6.familyNum = 2; g_DataGroup.push_back(t6);
-	t7.element[0] = 6.5; t7.element[1] = 3.0; t7.element[2] = 5.2; t4.element[3] = 2.0; t7.familyNum = 3; g_DataGroup.push_back(t7);
-	t8.element[0] = 6.2; t8.element[1] = 3.4; t8.element[2] = 5.4; t8.element[3] = 2.3; t8.familyNum = 3; g_DataGroup.push_back(t8);
-	t9.element[0] = 5.9; t9.element[1] = 3.0; t9.element[2] = 5.1; t9.element[3] = 1.8; t9.familyNum = 3; g_DataGroup.push_back(t9);
-}
+// è®­ç»ƒæ•°æ®è¾“å…¥
 void TrainDataIn()
 {
 	ifstream ifs("traindata.txt");
@@ -282,12 +266,6 @@ void TrainDataIn()
 	DataFormat td;
 	while(ifs>>td.element[0]>>td.element[1]>>td.element[2]>>td.element[3]>>td.familyNum)
 	{
-		/*
-		DataFormat td;
-		for(int i=0;i<ELEMENT_NUM;i++)
-			ifs>>td.element[i];
-		ifs>>td.familyNum;
-		*/
 		g_DataGroup.push_back(td);
 	}
 	ifs.close();
@@ -300,33 +278,87 @@ void TestDataIn()
 	DataFormat td;
 	while(ifs>>td.element[0]>>td.element[1]>>td.element[2]>>td.element[3]>>td.familyNum)
 	{
-		/*
-		DataFormat td;
-		for(int i=0;i<ELEMENT_NUM;i++)
-			ifs>>td.element[i];
-		ifs>>td.familyNum;
-		*/
 		g_TestGroup.push_back(td);
 	}
 	ifs.close();
 }
+
+// åˆå§‹åŒ–æ ¹ç»“ç‚¹æ•°æ®
+void InitRootNode(BTree &node)
+{
+	// å®ä¾‹åŒ–æ ¹èŠ‚ç‚¹
+	node = new BTreeNode;
+	node->familyNum = -1;
+
+	// å½“å‰æ‰€æœ‰æ•°æ®éƒ½å¤„äºæ ¹èŠ‚ç‚¹
+	int dataSum = g_DataGroup.size();
+	for(int i=0;i<dataSum;i++)
+		node->subSet.push_back(i);
+}
+
+// åˆå§‹åŒ–æ–°ç»“ç‚¹ å¤„ç†åŒ…å«çš„æŒ‡é’ˆç­‰
+void InitNewNode(BTreeNode &node)
+{
+	node.lChild = NULL; node.rChild = NULL;
+	node.familyNum = -1;
+	node.spif.divideLine = -1;
+	node.spif.divideRule = -1;
+	node.spif.entropy = -1;
+}
+
+// å»ºç«‹å†³ç­–æ ‘
+void BuildTree(BTree &node)
+{
+	int perfectRule;		// æœ€ä½³åˆ’åˆ†å±æ€§
+	double perfectLine;		// æœ€ä½³åˆ†è£‚ç‚¹
+	if(CalcEntropy(*node) == 0)			// è¯¥ç»“ç‚¹ä¸ºçº¯ç‚¹ æ— éœ€å»ºç«‹å­æ ‘
+	{
+		node->lChild = NULL;	node->rChild = NULL;
+		node->spif.divideRule = -1;	node->spif.divideLine = -1;
+		node->familyNum = GetCategory(*node);
+		return;
+	}else		// å°šæœ‰æ‚è´¨ ç»§ç»­åˆ†è£‚
+	{
+		// å¯¹å½“å‰ç»“ç‚¹ç”Ÿæˆæ‰€æœ‰åˆ†è£‚æ–¹æ¡ˆ
+		GetAllSpilit(*node);
+
+		// é€‰æ‹©ä¿¡æ¯å¢ç›Šç‡æœ€å¤§çš„ä½œä¸ºåˆ†è£‚å±æ€§
+		perfectRule = GetPerfectRule();
+		node->spif.divideRule = perfectRule;
+
+		// é€‰å®šåˆ’åˆ†å±æ€§å é€‰æ‹©ä¿¡æ¯å¢ç›Šæœ€å¤§çš„ä½œä¸ºåˆ†è£‚ç•Œçº¿
+		perfectLine = GetPerfectLine(node->spif.divideRule);
+		node->spif.divideLine = perfectLine;
+
+		// åˆ†è£‚
+		Spilit(*node);
+
+		// é€’å½’ç”Ÿæˆå­æ ‘
+		BuildTree(node->lChild);
+		BuildTree(node->rChild);
+	}
+}
+
+// æ‰“å°å†³ç­–æ ‘
 void TreePrint(BTree T,int level)
 {  
-    if(!T)							//Èç¹ûÖ¸ÕëÎª¿Õ£¬·µ»ØÉÏÒ»²ã  
+    if(!T)							//å¦‚æœæŒ‡é’ˆä¸ºç©ºï¼Œè¿”å›ä¸Šä¸€å±‚  
     {  
         return;  
     }  
-    TreePrint(T->rChild,level+1);	//´òÓ¡ÓÒ×ÓÊ÷£¬²¢½«²ã´Î¼Ó1  
-    for (int i=0;i<level;i++)		//°´ÕÕµİ¹éµÄ²ã´Î´òÓ¡¿Õ¸ñ  
+    TreePrint(T->rChild,level+1);	//æ‰“å°å³å­æ ‘ï¼Œå¹¶å°†å±‚æ¬¡åŠ 1  
+    for (int i=0;i<level;i++)		//æŒ‰ç…§é€’å½’çš„å±‚æ¬¡æ‰“å°ç©ºæ ¼  
     {  
-        printf("   ");  
+        printf("        ");  
     }
 	if(T->familyNum != -1)
-		cout<<T->familyNum<<endl;	//Êä³ö¸ù½áµã
+		cout<<T->familyNum<<endl;	//è¾“å‡ºæ ¹ç»“ç‚¹
 	else
-		cout<<(char)(T->spif.divideRule + 'A')<<endl;
-    TreePrint(T->lChild,level+1);	//´òÓ¡×ó×ÓÊ÷£¬²¢½«²ã´Î¼Ó1  
+		cout<<(char)(T->spif.divideRule + 'A')<<"("<<T->spif.divideLine<<")<"<<endl;
+    TreePrint(T->lChild,level+1);	//æ‰“å°å·¦å­æ ‘ï¼Œå¹¶å°†å±‚æ¬¡åŠ 1  
 }
+
+// ç»™å®šå±æ€§å€¼ æ ¹æ®å†³ç­–æ ‘ é¢„æµ‹ç±»åˆ«å€¼
 void SearchResult(BTree &node,const DataFormat &data,int &result)
 {
 	if(node->spif.entropy == 0)
@@ -337,9 +369,13 @@ void SearchResult(BTree &node,const DataFormat &data,int &result)
 
 	int spilitRule = node->spif.divideRule;
 	double spilitPoint = node->spif.divideLine;
-	if(data.element[spilitRule] < spilitPoint) SearchResult(node->lChild,data,result);
-	else SearchResult(node->rChild,data,result);
+	if(data.element[spilitRule] < spilitPoint) 
+		SearchResult(node->lChild,data,result);
+	else 
+		SearchResult(node->rChild,data,result);
 }
+
+// æµ‹ç®—æ­£ç¡®ç‡
 void VerifyTestData(BTree &node)
 {
 	cout<<setw(5)<<"A"<<setw(5)<<"B"<<setw(5)<<"C"<<setw(5)<<"D"
@@ -357,22 +393,47 @@ void VerifyTestData(BTree &node)
 		if(result == g_TestGroup[i].familyNum)
 		{
 			correct++;
-			cout<<setw(5)<<"¡Ì"<<endl;
+			cout<<setw(5)<<"âˆš"<<endl;
 		}
 		else 
-			cout<<setw(5)<<"¡Á"<<endl;
+			cout<<setw(5)<<"Ã—"<<endl;
 	}
-	cout<<"ÕıÈ·ÂÊ£º"<<(correct*1.0)/(testSum*1.0)<<endl;
+	cout<<"æ­£ç¡®ç‡ï¼š"<<(correct*1.0)/(testSum*1.0)<<endl;
 }
+
 int main()
 {
 	//debug();
+	/* æ–‡ä»¶æµè¾“å…¥è®­ç»ƒæ•°æ®å’Œæµ‹è¯•æ•°æ® */
 	TrainDataIn();
 	TestDataIn();
+
+	/* æ„å»ºå†³ç­–æ ‘ */
 	BTree decisionTree;
 	InitRootNode(decisionTree);
 	BuildTree(decisionTree);
+
+	/* æ‰“å°å†³ç­–æ ‘ */
 	TreePrint(decisionTree,0);
+	cout<<endl;
+	/* æµ‹è¯•æ•°æ®éªŒè¯ */
 	VerifyTestData(decisionTree);
+
 	return 0;
 }
+
+/*
+void debug()
+{
+	DataFormat t1,t2,t3,t4,t5,t6,t7,t8,t9;
+	t1.element[0] = 5.0; t1.element[1] = 3.0; t1.element[2] = 1.6; t1.element[3] = 0.2; t1.familyNum = 1; g_DataGroup.push_back(t1);
+	t2.element[0] = 5.0; t2.element[1] = 3.4; t2.element[2] = 1.6; t2.element[3] = 0.4; t2.familyNum = 1; g_DataGroup.push_back(t2);
+	t3.element[0] = 5.2; t3.element[1] = 3.5; t3.element[2] = 1.5; t3.element[3] = 0.2; t3.familyNum = 1; g_DataGroup.push_back(t3);
+	t4.element[0] = 6.7; t4.element[1] = 3.0; t4.element[2] = 4.4; t4.element[3] = 1.4; t4.familyNum = 2; g_DataGroup.push_back(t4);
+	t5.element[0] = 6.8; t5.element[1] = 2.8; t5.element[2] = 4.8; t5.element[3] = 1.4; t5.familyNum = 2; g_DataGroup.push_back(t5);
+	t6.element[0] = 6.7; t6.element[1] = 3.0; t6.element[2] = 5.0; t6.element[3] = 1.7; t6.familyNum = 2; g_DataGroup.push_back(t6);
+	t7.element[0] = 6.5; t7.element[1] = 3.0; t7.element[2] = 5.2; t4.element[3] = 2.0; t7.familyNum = 3; g_DataGroup.push_back(t7);
+	t8.element[0] = 6.2; t8.element[1] = 3.4; t8.element[2] = 5.4; t8.element[3] = 2.3; t8.familyNum = 3; g_DataGroup.push_back(t8);
+	t9.element[0] = 5.9; t9.element[1] = 3.0; t9.element[2] = 5.1; t9.element[3] = 1.8; t9.familyNum = 3; g_DataGroup.push_back(t9);
+}
+*/
